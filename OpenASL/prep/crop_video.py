@@ -35,23 +35,37 @@ def crop_resize(imgs, bbox, target_size):
     return rois
 
 def write_video_ffmpeg(rois, target_path, ffmpeg):
-    os.makedirs(os.path.dirname(target_path), exist_ok=True)
+    # Sanitize the target_path to replace problematic characters
+    # This example focuses on colons, but you might adjust for others as needed
+    directory, filename = os.path.split(target_path)
+    safe_filename = filename.replace(":", "-")
+    sanitized_target_path = os.path.join(directory, safe_filename)
+    
+    os.makedirs(os.path.dirname(sanitized_target_path), exist_ok=True)
     decimals = 10
     fps = 25
     tmp_dir = tempfile.mkdtemp()
     for i_roi, roi in enumerate(rois):
-        cv2.imwrite(os.path.join(tmp_dir, str(i_roi).zfill(decimals)+'.png'), roi)
+        cv2.imwrite(os.path.join(tmp_dir, f"{str(i_roi).zfill(decimals)}.png"), roi)
     list_fn = os.path.join(tmp_dir, "list")
     with open(list_fn, 'w') as fo:
-        fo.write("file " + "'" + tmp_dir+'/%0'+str(decimals)+'d.png' + "'\n")
-    ## ffmpeg
-    if os.path.isfile(target_path):
-        os.remove(target_path)
-    cmd = [ffmpeg, "-f", "concat", "-safe", "0", "-i", list_fn, "-q:v", "1", "-r", str(fps), '-y', '-crf', '20', '-pix_fmt', 'yuv420p', target_path]
-    pipe = subprocess.run(cmd, stdout = subprocess.PIPE, stderr = subprocess.STDOUT)
-    # rm tmp dir
+        # Adjusting the write format to avoid potential issues with paths containing spaces
+        fo.write(f"file '{os.path.join(tmp_dir, '%0'+str(decimals)+'d.png')}'\n")
+    
+    # Ensure the FFmpeg command uses the sanitized path
+    if os.path.isfile(sanitized_target_path):
+        os.remove(sanitized_target_path)
+    
+    cmd = [ffmpeg, "-f", "concat", "-safe", "0", "-i", list_fn, "-q:v", "1", "-r", str(fps), '-y', '-crf', '20', '-pix_fmt', 'yuv420p', sanitized_target_path]
+    pipe = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    if pipe.returncode == 0:
+        print(f"FFmpeg successfully created the video at {sanitized_target_path}")
+    else:
+        print(f"FFmpeg failed with return code {pipe.returncode}. Output:\n{pipe.stdout.decode()}")
+    
+    # Clean up temporary directory
     shutil.rmtree(tmp_dir)
-    return
+    print(f"Final video saved at {sanitized_target_path}")
 
 def get_clip(input_video_dir, output_video_dir, tsv_fn, bbox_fn, rank, nshard, target_size=224, ffmpeg=None):
     os.makedirs(output_video_dir, exist_ok=True)
@@ -83,6 +97,7 @@ def get_clip(input_video_dir, output_video_dir, tsv_fn, bbox_fn, rank, nshard, t
             if not ret:
                 break
             frames_origin.append(frame)
+        cap.release()
         shutil.rmtree(tmp_dir)
         x0, y0, x1, y1 = bbox
         W, H = frames_origin[0].shape[1], frames_origin[0].shape[0]

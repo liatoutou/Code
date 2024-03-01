@@ -6,7 +6,7 @@ import pandas as pd
 
 def download_video(vids, target_dir, youtube_dl):
     for url in tqdm(vids):
-        cmd = [youtube_dl, url , "-f", "bestvideo+bestaudio[ext=m4a]/bestvideo+bestaudio/best", "--merge-output-format", "mp4", "--no-check-certificate", "--restrict-filenames", "-o", "'"+target_dir+"/%(id)s.%(ext)s"+"'"]
+        cmd = [youtube_dl, url , "-f", "bestvideo+bestaudio[ext=m4a]/bestvideo+bestaudio/best", "--merge-output-format", "mp4", "--no-check-certificate", "--restrict-filenames", "-o", target_dir+"/%(id)s.%(ext)s"]
         print(" ".join(cmd))
         subprocess.run(" ".join(cmd), shell=True)
     return
